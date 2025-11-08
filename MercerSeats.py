@@ -63,11 +63,7 @@ def parseSeatsFromTable(soup, target_code, target_section):
 
         courseIdx = next((i for i, h in enumerate(headers) if 'course' in h), None)
         sectionIdx = next((i for i, h in enumerate(headers) if 'section' in h), None)
-        seatsIdx = next(
-            (i for i, h in enumerate(headers)
-             if '# seats available' in h or 'available' in h),
-            None
-        )
+        seatsIdx = next((i for i, h in enumerate(headers)if '# seats available' in h or 'available' in h),None)
         if seatsIdx is None:
             seatsIdx = next((i for i, h in enumerate(headers) if 'seat' in h), None)
 
@@ -216,14 +212,14 @@ def monitor(courses):
                 key = f"{c['code']}-{c['section']}"
                 seats = checkCourse(c['code'], c['section'])
                 now = time.strftime("%I:%M:%S %p")
+                print(f"[{now}] Checking {c['code']} section {c['section']}...")
 
                 if isinstance(seats, int):
                     if seats > 0:
                         msg = f"{seats} seat{'s' if seats != 1 else ''} available in {c['code']} section {c['section']}"
                         print(f"[{now}] {msg}")
-                        if lastStatus[key] != seats:
-                            notify(f"{msg}; Checked at {now} [View Schedule]({searchUrl})")
-                            lastStatus[key] = seats
+                        notify(f"{msg}; Checked at {now} [View Schedule]({searchUrl})")
+                        lastStatus[key] = seats
                     else:
                         print(f"[{now}] {c['code']} section {c['section']} full.")
                         lastStatus[key] = 0
@@ -231,16 +227,15 @@ def monitor(courses):
                     if seats:
                         msg = f"{c['code']} section {c['section']} open"
                         print(f"[{now}] {msg}")
-                        if not lastStatus[key]:
-                            notify(f"{msg}; Checked at {now} [View Schedule]({searchUrl})")
-                            lastStatus[key] = True
+                        notify(f"{msg}; Checked at {now} [View Schedule]({searchUrl})")
+                        lastStatus[key] = True
                     else:
                         print(f"[{now}] {c['code']} section {c['section']} full.")
                         lastStatus[key] = False
             except Exception as e:
                 slowPrt(f"Error checking {c['code']} {c['section']}: {e}")
 
-        print(f"Waiting {checkInterval/60:.1f} minutes before next check...\n")
+        print(f"\nWaiting {checkInterval/60:.1f} minutes before next check...\n")
         time.sleep(checkInterval)
 
 
