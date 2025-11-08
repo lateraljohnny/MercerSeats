@@ -212,7 +212,6 @@ def monitor(courses):
                 key = f"{c['code']}-{c['section']}"
                 seats = checkCourse(c['code'], c['section'])
                 now = time.strftime("%I:%M:%S %p")
-                print(f"[{now}] Checking {c['code']} section {c['section']}...")
 
                 if isinstance(seats, int):
                     if seats > 0:
@@ -237,6 +236,7 @@ def monitor(courses):
 
         print(f"\nWaiting {checkInterval/60:.1f} minutes before next check...\n")
         time.sleep(checkInterval)
+        print("\nChecking courses for availability again...")
 
 
 if __name__ == "__main__":
