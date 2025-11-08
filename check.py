@@ -6,14 +6,13 @@ import re
 #SETTINGS
 DISCORD_WEBHOOK = "https://discordapp.com/api/webhooks/1435337474422476973/_by6UEO_E2cPYWiZSVNitR2hd3dgEzs8Jc1E-Rt5xPO5BJD7Hc9X-eMMs1KWxZE0EiPJ"
 COURSES = [
-    {"code": "MAT 192", "section": "007"},
-    {"code": "MAT 192", "section": "008"},
+    {"code": "TCO 141", "section": "003"},
     {"code": "PHY 161", "section": "004"},
     {"code": "PHY 161", "section": "005"},
-    {"code": "TCO 141", "section": "003"},
-    {"code": "REL 110", "section": "001"},
-    {"code": "REL 110", "section": "002"},    
+    {"code": "CHM 321", "section": "006"},
+    {"code": "CHM 321", "section": "007"},
 ]
+
 CHECK_INTERVAL = 300 #5MINS
 SEARCH_URL = "https://adminapps.mercer.edu/classroomsched/default.aspx?C=M"
 REQUEST_TIMEOUT = 15
@@ -215,3 +214,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
