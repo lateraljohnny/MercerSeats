@@ -1,1 +1,1 @@
-# mercer-seat-checker
+# MercerSeats
