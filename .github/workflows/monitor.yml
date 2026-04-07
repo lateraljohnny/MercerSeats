@@ -24,4 +24,4 @@ jobs:
       - name: Run Script
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        run: python oneRun.py
+        run: python check.py
