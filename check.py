@@ -37,78 +37,51 @@ def notify(message):
 
 def checkCourse(code, section):
     session = requests.Session()
-    session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Referer": searchUrl
-    })
+    # ... (Headers and initial GET remain the same) ...
 
     try:
-        # 1. Initial Load to get tokens
-        r = session.get(searchUrl, timeout=20)
-        soup = BeautifulSoup(r.text, 'html.parser')
-        
-        # Capture ALL hidden fields (ViewState, EventValidation, etc.)
-        data = {i.get('name'): i.get('value', '') for i in soup.find_all('input', {'type': 'hidden'}) if i.get('name')}
-        
-        # Get all input names for dynamic mapping
-        all_names = [i.get('name') for i in soup.find_all('input')]
-
-        # 2. Map the dynamic field names
-        term_f = findName(all_names, ["radTerm"])
-        lvl_f = findName(all_names, ["radLevel"])
-        code_f = findName(all_names, ["searchCourseCode"])
-        sect_f = findName(all_names, ["searchCourseSection"])
-        btn_f = findName(all_names, ["Button1"])
-
-        if not all([term_f, code_f, btn_f]):
-            return "FIELD_MAP_ERROR"
-
-        # 3. Build Post Data
-        data.update({
-            term_f: '2026-FA',
-            lvl_f: 'U',
-            code_f: code,
-            sect_f: section,
-            btn_f: 'Submit',
-            '__EVENTTARGET': '',
-            '__EVENTARGUMENT': ''
-        })
-
-        # 4. Perform Search
+        # ... (POST request logic remains the same) ...
         r2 = session.post(searchUrl, data=data, timeout=20)
         
         if "no classes found" in r2.text.lower():
             return 0
             
-        # 5. Parse Results Table
         soup2 = BeautifulSoup(r2.text, 'html.parser')
         table = soup2.find('table', {'id': 'dgCounts'})
         
         if not table:
-            # This is where your current error triggers. 
-            # If the table is missing, the search didn't fire.
-            return None
+            return "TABLE_MISSING"
 
         rows = table.find_all('tr')[1:]
         for row in rows:
-            cols = row.find_all('td')
-            if len(cols) < 10: continue
+            cols = [td.get_text(strip=True) for td in row.find_all('td')]
+            if len(cols) < 5: continue # Basic safety check
             
-            row_code_clean = cols[1].text.strip().replace(" ", "").upper()
+            # 1. Aggressive cleaning for matching
+            # We look for the code (e.g., 'ACC204') inside the text of the first few columns
+            row_content_all = "".join(cols).replace(" ", "").upper()
             target_code_clean = code.replace(" ", "").upper()
-            row_sect_clean = cols[3].text.strip().upper()
-            target_sect_clean = section.strip().upper()
+            
+            # 2. Section check (usually column 3 or 4)
+            # We iterate through columns to find one that exactly matches your section
+            section_match = any(target_section.upper() == c.upper() for c in cols)
 
-            if target_code_clean in row_code_clean and target_sect_clean == row_sect_clean:
+            if target_code_clean in row_content_all and section_match:
+                # 3. Find the seats column
+                # In dgCounts, seats is usually the LAST column or the 10th column (index 9)
                 try:
-                    return int(cols[9].text.strip())
+                    return int(cols[-1]) # Try the very last column first
                 except:
+                    # Fallback: find the first column that looks like a standalone number
+                    for col_text in reversed(cols):
+                        if col_text.isdigit():
+                            return int(col_text)
                     return "PARSE_ERR"
+                    
         return "NOT_IN_TABLE"
 
     except Exception as e:
-        print(f"Request Error: {e}")
-        return "CONN_ERROR"
+        return f"CONN_ERROR: {str(e)[:20]}"
 
 if __name__ == "__main__":
     print(f"--- Mercer Seat Check: {time.strftime('%Y-%m-%d %H:%M:%S')} ---")
