@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import time
 import os
+import sys
 
 # ---------- SETTINGS ----------
 discordWebhook = os.getenv("DISCORD_WEBHOOK")
@@ -20,71 +21,82 @@ COURSES = [
 searchUrl = "https://adminapps.mercer.edu/classroomsched/default.aspx?C=M"
 requestTimeout = 20
 
+# ---------- HELPERS (From testseat.py) ----------
+
+def findName(names, substrings):
+    for s in substrings:
+        for n in names:
+            if n and s.lower() in n.lower():
+                return n
+    return None
+
 def notify(message):
     if not discordWebhook:
-        print(f"No Webhook set. Message: {message}")
+        print(f"Notification (No Webhook): {message}")
         return
     try:
         requests.post(discordWebhook, json={"content": message}, timeout=10)
     except Exception as e:
-        print(f"Discord error: {e}")
+        print(f"Failed to send Discord alert: {e}")
 
 def checkCourse(code, section):
     session = requests.Session()
-    # Adding a realistic User-Agent is crucial for Mercer's server
     session.headers.update({
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     })
 
     try:
-        # Step 1: Get the initial page to grab ViewState/EventValidation
-        response = session.get(searchUrl, timeout=requestTimeout)
-        soup = BeautifulSoup(response.text, 'html.parser')
+        # Step 1: Initial Page Load
+        r = session.get(searchUrl, timeout=requestTimeout)
+        soup = BeautifulSoup(r.text, 'html.parser')
         
-        # Extract all hidden ASP.NET fields
-        payload = {
-            inp.get('name'): inp.get('value', '') 
-            for inp in soup.find_all('input', {'type': 'hidden'})
-        }
+        # Get all inputs
+        inputs = soup.find_all('input')
+        input_names = [i.get('name') for i in inputs]
+        
+        # Capture ASP.NET hidden fields
+        data = {i.get('name'): i.get('value', '') for i in inputs if i.get('type') == 'hidden'}
 
-        # Step 2: Set the search parameters
-        # We find the name of the radio button for the term '2026-FA'
-        term_name = "radTerm" # Default
-        for radio in soup.find_all('input', {'type': 'radio'}):
-            if '2026-FA' in str(radio.get('value')):
-                term_name = radio.get('name')
-                break
+        # Step 2: Match field names using testseat's findName logic
+        term_field = findName(input_names, ["radTerm", "term"])
+        level_field = findName(input_names, ["radLevel", "level"])
+        code_field = findName(input_names, ["searchCourseCode", "txtCourseCode"])
+        sect_field = findName(input_names, ["searchCourseSection", "txtSection"])
+        btn_field = findName(input_names, ["Button1", "btnSubmit", "Submit"])
 
-        payload.update({
-            term_name: '2026-FA',
-            'radLevel': 'U',
-            'searchCourseCode': code,
-            'searchCourseSection': section,
-            'Button1': 'Submit'
+        if not all([term_field, code_field, btn_field]):
+            return None
+
+        # Step 3: Build Payload
+        data.update({
+            term_field: '2026-FA',
+            level_field: 'U',
+            code_field: code,
+            sect_field: section,
+            btn_field: 'Submit'
         })
 
-        # Step 3: Post the search
-        res = session.post(searchUrl, data=payload, timeout=requestTimeout)
-        if "no classes found" in res.text.lower():
-            return 0
+        # Step 4: Submit Search
+        r2 = session.post(searchUrl, data=data, timeout=requestTimeout)
         
-        # Step 4: Parse the results table
-        results_soup = BeautifulSoup(res.text, 'html.parser')
-        table = results_soup.find('table', {'id': 'dgCounts'})
+        if "no classes found" in r2.text.lower():
+            return 0
+            
+        # Step 5: Parse Table
+        soup2 = BeautifulSoup(r2.text, 'html.parser')
+        table = soup2.find('table', {'id': 'dgCounts'})
         if not table:
             return None
-            
-        rows = table.find_all('tr')[1:] # Skip header
+
+        rows = table.find_all('tr')[1:]
         for row in rows:
             cols = row.find_all('td')
             if len(cols) < 10: continue
             
-            # Clean up text for matching
             row_code = cols[1].text.strip().replace(" ", "").upper()
-            target_code = code.replace(" ", "").upper()
-            row_section = cols[3].text.strip()
+            row_sect = cols[3].text.strip()
             
-            if target_code in row_code and section == row_section:
+            if code.replace(" ", "").upper() in row_code and section == row_sect:
                 try:
                     return int(cols[9].text.strip())
                 except:
@@ -92,22 +104,24 @@ def checkCourse(code, section):
         return None
 
     except Exception as e:
-        print(f"Connection error for {code}: {e}")
+        print(f"Error: {e}")
         return False
+
+# ---------- EXECUTION ----------
 
 if __name__ == "__main__":
     print(f"--- Starting Seat Check: {time.strftime('%Y-%m-%d %H:%M:%S')} ---")
     
     for c in COURSES:
         seats = checkCourse(c['code'], c['section'])
-        now = time.strftime("%I:%M %p")
+        timestamp = time.strftime("%I:%M %p")
         
         if isinstance(seats, int):
             status = f"OPEN ({seats} seats)" if seats > 0 else "FULL"
-            print(f"[{now}] {c['code']} {c['section']}: {status}")
+            print(f"[{timestamp}] {c['code']} {c['section']}: {status}")
             if seats > 0:
-                notify(f"🚨 **SEAT OPEN**: {seats} available in {c['code']} ({c['section']})")
+                notify(f"🟢 **SEAT OPEN**: {seats} available in {c['code']} section {c['section']}")
         else:
-            print(f"[{now}] {c['code']} {c['section']}: not found/error.")
+            print(f"[{timestamp}] {c['code']} {c['section']}: not found/error.")
             
     print("--- Check Complete ---")
