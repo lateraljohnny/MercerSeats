@@ -64,34 +64,42 @@ def checkCourse(code, section):
     })
 
     try:
+        # 1. Get the initial page to grab ASP.NET hidden state (ViewState)
         r = session.get(searchUrl, timeout=requestTimeout)
         soup = BeautifulSoup(r.text, 'html.parser')
         
-        # Collect ASP.NET Hidden Fields
+        # Extract hidden fields required by ASP.NET
         data = {inp.get('name'): inp.get('value', '') for inp in soup.find_all('input', {'type': 'hidden'}) if inp.get('name')}
         
-        # Determine Term field name (radTerm)
-        term_field = 'radTerm'
-        for inp in soup.find_all('input', {'type': 'radio'}):
-            if '2026' in inp.get('value', '') and 'FA' in inp.get('value', ''):
-                term_field = inp.get('name')
+        # 2. Identify the Term field name dynamically
+        # We look for the radio button that corresponds to Fall 2026
+        term_field_name = None
+        for radio in soup.find_all('input', {'type': 'radio'}):
+            if '2026-FA' in str(radio.get('value')):
+                term_field_name = radio.get('name')
                 break
+        
+        if not term_field_name:
+            term_field_name = 'radTerm' # Fallback default
 
-        # Setup POST Data
+        # 3. Setup the Search payload
         data.update({
-            term_field: '2026-FA',
-            'radLevel': 'U',
+            term_field_name: '2026-FA',
+            'radLevel': 'U', # Undergraduate
             'searchCourseCode': code,
             'searchCourseSection': section,
             'Button1': 'Submit' 
         })
 
+        # 4. Perform the actual search
         r2 = session.post(searchUrl, data=data, timeout=requestTimeout)
         
         if "no classes found" in r2.text.lower():
-            return 0
-        
-        return parseSeatsFromTable(BeautifulSoup(r2.text, 'html.parser'), code, section)
+            return 0 # Course exists but is totally empty/missing
+            
+        # 5. Parse the results table
+        final_soup = BeautifulSoup(r2.text, 'html.parser')
+        return parseSeatsFromTable(final_soup, code, section)
 
     except Exception as e:
         print(f"Error checking {code}: {e}")
