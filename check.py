@@ -37,10 +37,41 @@ def notify(message):
 
 def checkCourse(code, section):
     session = requests.Session()
-    # ... (Headers and initial GET remain the same) ...
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": searchUrl
+    })
 
     try:
-        # ... (POST request logic remains the same) ...
+        # 1. Initial Load to get tokens
+        r = session.get(searchUrl, timeout=20)
+        soup = BeautifulSoup(r.text, 'html.parser')
+        
+        # Capture ALL hidden fields
+        data = {i.get('name'): i.get('value', '') for i in soup.find_all('input', {'type': 'hidden'}) if i.get('name')}
+        all_names = [i.get('name') for i in soup.find_all('input')]
+
+        # 2. Map dynamic field names
+        term_f = findName(all_names, ["radTerm"])
+        lvl_f = findName(all_names, ["radLevel"])
+        code_f = findName(all_names, ["searchCourseCode"])
+        sect_f = findName(all_names, ["searchCourseSection"])
+        btn_f = findName(all_names, ["Button1"])
+
+        if not all([term_f, code_f, btn_f]):
+            return "FIELD_MAP_ERROR"
+
+        data.update({
+            term_f: '2026-FA',
+            lvl_f: 'U',
+            code_f: code,
+            sect_f: section,
+            btn_f: 'Submit',
+            '__EVENTTARGET': '',
+            '__EVENTARGUMENT': ''
+        })
+
+        # 3. Perform Search
         r2 = session.post(searchUrl, data=data, timeout=20)
         
         if "no classes found" in r2.text.lower():
@@ -55,33 +86,32 @@ def checkCourse(code, section):
         rows = table.find_all('tr')[1:]
         for row in rows:
             cols = [td.get_text(strip=True) for td in row.find_all('td')]
-            if len(cols) < 5: continue # Basic safety check
+            if len(cols) < 5: continue 
             
-            # 1. Aggressive cleaning for matching
-            # We look for the code (e.g., 'ACC204') inside the text of the first few columns
+            # 4. Matching Logic
             row_content_all = "".join(cols).replace(" ", "").upper()
             target_code_clean = code.replace(" ", "").upper()
+            target_section = section.strip().upper()
             
-            # 2. Section check (usually column 3 or 4)
-            # We iterate through columns to find one that exactly matches your section
-            section_match = any(target_section.upper() == c.upper() for c in cols)
+            # Section check: looks for exact match in any column
+            section_match = any(target_section == c.upper() for c in cols)
 
             if target_code_clean in row_content_all and section_match:
-                # 3. Find the seats column
-                # In dgCounts, seats is usually the LAST column or the 10th column (index 9)
                 try:
-                    return int(cols[-1]) # Try the very last column first
-                except:
-                    # Fallback: find the first column that looks like a standalone number
+                    # Check last column for seats, then fallback
+                    if cols[-1].isdigit():
+                        return int(cols[-1])
                     for col_text in reversed(cols):
                         if col_text.isdigit():
                             return int(col_text)
+                    return "PARSE_ERR"
+                except:
                     return "PARSE_ERR"
                     
         return "NOT_IN_TABLE"
 
     except Exception as e:
-        return f"CONN_ERROR: {str(e)[:20]}"
+        return f"CONN_ERR: {str(e)[:15]}"
 
 if __name__ == "__main__":
     print(f"--- Mercer Seat Check: {time.strftime('%Y-%m-%d %H:%M:%S')} ---")
