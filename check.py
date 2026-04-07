@@ -2,9 +2,9 @@ import requests
 from bs4 import BeautifulSoup
 import time
 import os
-import sys
 
-# ---------- SETTINGS ----------
+# ---------- CONFIGURATION ----------
+# This pulls from your GitHub Secrets
 discordWebhook = os.getenv("DISCORD_WEBHOOK")
 
 COURSES = [
@@ -19,9 +19,6 @@ COURSES = [
 ]
 
 searchUrl = "https://adminapps.mercer.edu/classroomsched/default.aspx?C=M"
-requestTimeout = 20
-
-# ---------- HELPERS (From testseat.py) ----------
 
 def findName(names, substrings):
     for s in substrings:
@@ -32,71 +29,73 @@ def findName(names, substrings):
 
 def notify(message):
     if not discordWebhook:
-        print(f"Notification (No Webhook): {message}")
+        print(f"DEBUG: No Webhook. Message: {message}")
         return
     try:
         requests.post(discordWebhook, json={"content": message}, timeout=10)
     except Exception as e:
-        print(f"Failed to send Discord alert: {e}")
+        print(f"Discord Error: {e}")
 
 def checkCourse(code, section):
+    # We MUST use a session to persist cookies between the GET and the POST
     session = requests.Session()
     session.headers.update({
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     })
 
     try:
-        # Step 1: Initial Page Load
-        r = session.get(searchUrl, timeout=requestTimeout)
+        # 1. Initial Load to get ViewState
+        r = session.get(searchUrl, timeout=20)
         soup = BeautifulSoup(r.text, 'html.parser')
         
-        # Get all inputs
         inputs = soup.find_all('input')
-        input_names = [i.get('name') for i in inputs]
+        names = [i.get('name') for i in inputs]
         
-        # Capture ASP.NET hidden fields
+        # Capture hidden ASP.NET fields (ViewState, EventValidation, etc.)
         data = {i.get('name'): i.get('value', '') for i in inputs if i.get('type') == 'hidden'}
 
-        # Step 2: Match field names using testseat's findName logic
-        term_field = findName(input_names, ["radTerm", "term"])
-        level_field = findName(input_names, ["radLevel", "level"])
-        code_field = findName(input_names, ["searchCourseCode", "txtCourseCode"])
-        sect_field = findName(input_names, ["searchCourseSection", "txtSection"])
-        btn_field = findName(input_names, ["Button1", "btnSubmit", "Submit"])
+        # 2. Map the dynamic field names
+        term_f = findName(names, ["radTerm"])
+        lvl_f = findName(names, ["radLevel"])
+        code_f = findName(names, ["searchCourseCode"])
+        sect_f = findName(names, ["searchCourseSection"])
+        btn_f = findName(names, ["Button1"])
 
-        if not all([term_field, code_field, btn_field]):
-            return None
+        if not all([term_f, code_f, btn_f]):
+            return "FIELD_ERROR"
 
-        # Step 3: Build Payload
+        # 3. Update payload
         data.update({
-            term_field: '2026-FA',
-            level_field: 'U',
-            code_field: code,
-            sect_field: section,
-            btn_field: 'Submit'
+            term_f: '2026-FA',
+            lvl_f: 'U',
+            code_f: code,
+            sect_f: section,
+            btn_f: 'Submit'
         })
 
-        # Step 4: Submit Search
-        r2 = session.post(searchUrl, data=data, timeout=requestTimeout)
+        # 4. The actual search
+        r2 = session.post(searchUrl, data=data, timeout=20)
         
         if "no classes found" in r2.text.lower():
             return 0
             
-        # Step 5: Parse Table
+        # 5. Parse Table
         soup2 = BeautifulSoup(r2.text, 'html.parser')
         table = soup2.find('table', {'id': 'dgCounts'})
+        
         if not table:
             return None
 
-        rows = table.find_all('tr')[1:]
+        rows = table.find_all('tr')[1:] # Skip header
         for row in rows:
             cols = row.find_all('td')
             if len(cols) < 10: continue
             
-            row_code = cols[1].text.strip().replace(" ", "").upper()
-            row_sect = cols[3].text.strip()
+            # Use the same matching logic as testseat
+            c_code = cols[1].text.strip().replace(" ", "").upper()
+            c_sect = cols[3].text.strip()
             
-            if code.replace(" ", "").upper() in row_code and section == row_sect:
+            if code.replace(" ", "").upper() in c_code and section == c_sect:
                 try:
                     return int(cols[9].text.strip())
                 except:
@@ -104,24 +103,22 @@ def checkCourse(code, section):
         return None
 
     except Exception as e:
-        print(f"Error: {e}")
-        return False
-
-# ---------- EXECUTION ----------
+        print(f"Request Error: {e}")
+        return "CONN_ERROR"
 
 if __name__ == "__main__":
-    print(f"--- Starting Seat Check: {time.strftime('%Y-%m-%d %H:%M:%S')} ---")
+    print(f"--- Mercer Seat Check: {time.strftime('%Y-%m-%d %H:%M:%S')} ---")
     
     for c in COURSES:
         seats = checkCourse(c['code'], c['section'])
-        timestamp = time.strftime("%I:%M %p")
+        t = time.strftime("%I:%M %p")
         
         if isinstance(seats, int):
             status = f"OPEN ({seats} seats)" if seats > 0 else "FULL"
-            print(f"[{timestamp}] {c['code']} {c['section']}: {status}")
+            print(f"[{t}] {c['code']} {c['section']}: {status}")
             if seats > 0:
-                notify(f"🟢 **SEAT OPEN**: {seats} available in {c['code']} section {c['section']}")
+                notify(f"🟢 **SEAT OPEN**: {seats} available in **{c['code']}** (Section {c['section']})")
         else:
-            print(f"[{timestamp}] {c['code']} {c['section']}: not found/error.")
-            
-    print("--- Check Complete ---")
+            print(f"[{t}] {c['code']} {c['section']}: ERROR ({seats})")
+
+    print("--- Check Finished ---")
