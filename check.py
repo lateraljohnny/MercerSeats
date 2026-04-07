@@ -82,21 +82,26 @@ def checkCourse(code, section):
         # 5. Parse Table
         soup2 = BeautifulSoup(r2.text, 'html.parser')
         table = soup2.find('table', {'id': 'dgCounts'})
-        
         if not table:
             return None
 
-        rows = table.find_all('tr')[1:] # Skip header
+        rows = table.find_all('tr')[1:]
         for row in rows:
             cols = row.find_all('td')
             if len(cols) < 10: continue
             
-            # Use the same matching logic as testseat
-            c_code = cols[1].text.strip().replace(" ", "").upper()
-            c_sect = cols[3].text.strip()
+            # Use extra-aggressive cleaning to match "ACC 204" vs "ACC204"
+            row_code_clean = cols[1].text.strip().replace(" ", "").upper()
+            target_code_clean = code.replace(" ", "").upper()
+            row_sect_clean = cols[3].text.strip().upper()
+            target_sect_clean = section.strip().upper()
             
-            if code.replace(" ", "").upper() in c_code and section == c_sect:
+            # Print for your GitHub logs so you can see what it's seeing
+            # print(f"Comparing {row_code_clean} {row_sect_clean} to {target_code_clean} {target_sect_clean}")
+
+            if target_code_clean in row_code_clean and target_sect_clean == row_sect_clean:
                 try:
+                    # Column 9 is 'Seats Available'
                     return int(cols[9].text.strip())
                 except:
                     return None
