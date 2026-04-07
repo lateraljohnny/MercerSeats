@@ -2,13 +2,16 @@ name: Course Seat Monitor
 
 on:
   schedule:
-    # This runs every 20 minutes (roughly)
     - cron: '*/20 * * * *'
-  workflow_dispatch: # This adds a "Run manually" button
+  workflow_dispatch:
 
 jobs:
   run-monitor:
     runs-on: ubuntu-latest
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
