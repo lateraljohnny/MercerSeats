@@ -1,12 +1,9 @@
 import requests
 from bs4 import BeautifulSoup
 import time
-import re
-import sys
 import os
 
 # ---------- SETTINGS ----------
-# Pulls from GitHub Secrets for security
 discordWebhook = os.getenv("DISCORD_WEBHOOK")
 
 COURSES = [
@@ -23,108 +20,94 @@ COURSES = [
 searchUrl = "https://adminapps.mercer.edu/classroomsched/default.aspx?C=M"
 requestTimeout = 20
 
-# ---------- FUNCTIONS ----------
-
 def notify(message):
     if not discordWebhook:
-        print(f"Notification (No Webhook): {message}")
+        print(f"No Webhook set. Message: {message}")
         return
     try:
         requests.post(discordWebhook, json={"content": message}, timeout=10)
     except Exception as e:
-        print(f"Failed to send Discord alert: {e}")
-
-def parseSeatsFromTable(soup, code, section):
-    table = soup.find('table', {'id': 'dgCounts'})
-    if not table:
-        return None
-    
-    rows = table.find_all('tr')
-    for row in rows[1:]:  # Skip header
-        cols = row.find_all('td')
-        if len(cols) < 5: continue
-        
-        row_text = row.get_text(separator=" ").upper()
-        clean_code = code.upper().replace(" ", "")
-        
-        if clean_code in row_text.replace(" ", "") and section.upper() in row_text:
-            try:
-                # Typically the 5th or 6th column contains 'Available' seats
-                seats_str = cols[4].get_text(strip=True)
-                return int(seats_str)
-            except:
-                continue
-    return None
+        print(f"Discord error: {e}")
 
 def checkCourse(code, section):
     session = requests.Session()
+    # Adding a realistic User-Agent is crucial for Mercer's server
     session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Referer": searchUrl
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     })
 
     try:
-        # 1. Get the initial page to grab ASP.NET hidden state (ViewState)
-        r = session.get(searchUrl, timeout=requestTimeout)
-        soup = BeautifulSoup(r.text, 'html.parser')
+        # Step 1: Get the initial page to grab ViewState/EventValidation
+        response = session.get(searchUrl, timeout=requestTimeout)
+        soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Extract hidden fields required by ASP.NET
-        data = {inp.get('name'): inp.get('value', '') for inp in soup.find_all('input', {'type': 'hidden'}) if inp.get('name')}
-        
-        # 2. Identify the Term field name dynamically
-        # We look for the radio button that corresponds to Fall 2026
-        term_field_name = None
+        # Extract all hidden ASP.NET fields
+        payload = {
+            inp.get('name'): inp.get('value', '') 
+            for inp in soup.find_all('input', {'type': 'hidden'})
+        }
+
+        # Step 2: Set the search parameters
+        # We find the name of the radio button for the term '2026-FA'
+        term_name = "radTerm" # Default
         for radio in soup.find_all('input', {'type': 'radio'}):
             if '2026-FA' in str(radio.get('value')):
-                term_field_name = radio.get('name')
+                term_name = radio.get('name')
                 break
-        
-        if not term_field_name:
-            term_field_name = 'radTerm' # Fallback default
 
-        # 3. Setup the Search payload
-        data.update({
-            term_field_name: '2026-FA',
-            'radLevel': 'U', # Undergraduate
+        payload.update({
+            term_name: '2026-FA',
+            'radLevel': 'U',
             'searchCourseCode': code,
             'searchCourseSection': section,
-            'Button1': 'Submit' 
+            'Button1': 'Submit'
         })
 
-        # 4. Perform the actual search
-        r2 = session.post(searchUrl, data=data, timeout=requestTimeout)
+        # Step 3: Post the search
+        res = session.post(searchUrl, data=payload, timeout=requestTimeout)
+        if "no classes found" in res.text.lower():
+            return 0
         
-        if "no classes found" in r2.text.lower():
-            return 0 # Course exists but is totally empty/missing
+        # Step 4: Parse the results table
+        results_soup = BeautifulSoup(res.text, 'html.parser')
+        table = results_soup.find('table', {'id': 'dgCounts'})
+        if not table:
+            return None
             
-        # 5. Parse the results table
-        final_soup = BeautifulSoup(r2.text, 'html.parser')
-        return parseSeatsFromTable(final_soup, code, section)
+        rows = table.find_all('tr')[1:] # Skip header
+        for row in rows:
+            cols = row.find_all('td')
+            if len(cols) < 10: continue
+            
+            # Clean up text for matching
+            row_code = cols[1].text.strip().replace(" ", "").upper()
+            target_code = code.replace(" ", "").upper()
+            row_section = cols[3].text.strip()
+            
+            if target_code in row_code and section == row_section:
+                try:
+                    return int(cols[9].text.strip())
+                except:
+                    return None
+        return None
 
     except Exception as e:
-        print(f"Error checking {code}: {e}")
+        print(f"Connection error for {code}: {e}")
         return False
-
-# ---------- MAIN EXECUTION ----------
 
 if __name__ == "__main__":
     print(f"--- Starting Seat Check: {time.strftime('%Y-%m-%d %H:%M:%S')} ---")
     
-    if not discordWebhook:
-        print("WARNING: DISCORD_WEBHOOK environment variable not found.")
-
     for c in COURSES:
         seats = checkCourse(c['code'], c['section'])
-        timestamp = time.strftime("%I:%M %p")
+        now = time.strftime("%I:%M %p")
         
         if isinstance(seats, int):
+            status = f"OPEN ({seats} seats)" if seats > 0 else "FULL"
+            print(f"[{now}] {c['code']} {c['section']}: {status}")
             if seats > 0:
-                msg = f"🟢 SEAT OPEN: {seats} available in {c['code']} section {c['section']}"
-                print(f"[{timestamp}] {msg}")
-                notify(f"{msg} (Checked at {timestamp})")
-            else:
-                print(f"[{timestamp}] {c['code']} {c['section']} is FULL.")
+                notify(f"🚨 **SEAT OPEN**: {seats} available in {c['code']} ({c['section']})")
         else:
-            print(f"[{timestamp}] {c['code']} {c['section']} not found/error.")
-    
+            print(f"[{now}] {c['code']} {c['section']}: not found/error.")
+            
     print("--- Check Complete ---")
