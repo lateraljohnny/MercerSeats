@@ -2,7 +2,9 @@ name: Course Seat Monitor
 
 on:
   schedule:
-    - cron: '*/20 * * * *'
+    # Changed from '*/20 * * * *' to run at minutes 7, 27, and 47.
+    # This avoids the high-traffic '00, 20, 40' spikes on GitHub's shared runners.
+    - cron: '7,27,47 * * * *'
   workflow_dispatch:
 
 jobs:
