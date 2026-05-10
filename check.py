@@ -9,8 +9,6 @@ discordWebhook = os.getenv("DISCORD_WEBHOOK")
 COURSES = [
     {"code": "BMB 465", "section": "003"},
     {"code": "BMB 465", "section": "004"},
-    {"code": "PHY 162", "section": "001"},
-    {"code": "PHY 162", "section": "002"},
     {"code": "EGR 232", "section": "006"},
 ]
 
