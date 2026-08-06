@@ -6,7 +6,7 @@ import sys
 import random
 
 # SETTINGS
-discordWebhook = "https://discord.com/api/webhooks/1436527367593005156/RJuSxq33K7soLf-Wvr6P-E-0_8hFTj6SBFSzfA_shTlFOH2QwcUQb8HHZbaFisgS8cEx"
+discordWebhook = DISCORD_WEBHOOK
 COURSES = [
     {"code": "PHY 162", "section": "001"},
     {"code": "PHY 162", "section": "002"},
