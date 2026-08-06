@@ -4,9 +4,10 @@ import time
 import re
 import sys
 import random
+import os
 
 # SETTINGS
-discordWebhook = DISCORD_WEBHOOK
+discordWebhook = os.getenv("DISCORD_WEBHOOK")
 COURSES = [
     {"code": "PHY 162", "section": "001"},
     {"code": "PHY 162", "section": "002"},
