@@ -7,7 +7,10 @@ import os
 discordWebhook = os.getenv("DISCORD_WEBHOOK")
 
 COURSES = [
-    {"code": "THR 218", "section": "001"},
+    {"code": "ACC 204", "section": "008"},
+    {"code": "BIO 482", "section": "001"},
+    {"code": "BIO 382", "section": "001"},
+    {"code": "INT 301", "section": "009"}, 
 ]
 
 searchUrl = "https://adminapps.mercer.edu/classroomsched/default.aspx?C=M"
