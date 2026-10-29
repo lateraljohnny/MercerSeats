@@ -87,7 +87,7 @@ def checkCourse(code, section):
         headers = [th.get_text(strip=True).lower() for th in rows[0].find_all(['th', 'td'])]
         avail_idx = -1
         for idx, h in enumerate(headers):
-            if "avail" in h or ("seat" in h and "cap" not in h):
+            if "avail" in h:
                 avail_idx = idx
                 break
 
