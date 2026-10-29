@@ -58,7 +58,7 @@ def checkCourse(code, section):
             return "FIELD_MAP_ERROR"
 
         data.update({
-            term_f: '2026-FA',
+            term_f: '2027-SP',
             lvl_f: 'U',
             code_f: code,
             sect_f: section,
@@ -120,7 +120,7 @@ if __name__ == "__main__":
             status = f"OPEN ({seats} seats)" if seats > 0 else "FULL"
             print(f"[{t}] {c['code']} {c['section']}: {status}")
             if seats > 0:
-                notify(f"🟢 **SEAT OPEN**: {seats} available in **{c['code']}** (Section {c['section']})")
+                notify(f"**SEAT OPEN**: {seats} available in **{c['code']}** (Section {c['section']})")
         else:
             print(f"[{t}] {c['code']} {c['section']}: ERROR ({seats})")
 
