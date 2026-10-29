@@ -79,27 +79,39 @@ def checkCourse(code, section):
         if not table:
             return "TABLE_MISSING"
 
-        rows = table.find_all('tr')[1:]
-        for row in rows:
+        rows = table.find_all('tr')
+        if not rows:
+            return "TABLE_EMPTY"
+
+        # Map headers to find the exact index of "Seats Available"
+        headers = [th.get_text(strip=True).lower() for th in rows[0].find_all(['th', 'td'])]
+        avail_idx = -1
+        for idx, h in enumerate(headers):
+            if "avail" in h or ("seat" in h and "cap" not in h):
+                avail_idx = idx
+                break
+
+        for row in rows[1:]:
             cols = [td.get_text(strip=True) for td in row.find_all('td')]
             if len(cols) < 5: continue 
             
-            # 4. Matching Logic
             row_content_all = "".join(cols).replace(" ", "").upper()
             target_code_clean = code.replace(" ", "").upper()
             target_section = section.strip().upper()
             
-            # Section check: looks for exact match in any column
             section_match = any(target_section == c.upper() for c in cols)
 
             if target_code_clean in row_content_all and section_match:
                 try:
-                    # Check last column for seats, then fallback
-                    if cols[-1].isdigit():
-                        return int(cols[-1])
-                    for col_text in reversed(cols):
-                        if col_text.isdigit():
-                            return int(col_text)
+                    # Use dynamically found index if available, otherwise fallback safely
+                    if avail_idx != -1 and len(cols) > avail_idx and cols[avail_idx].isdigit():
+                        return int(cols[avail_idx])
+                    
+                    # Fallback: if header wasn't found, pick the appropriate column index manually 
+                    # (Adjust index [3] or [4] based on your table layout, avoiding the last column)
+                    if len(cols) > 4 and cols[4].isdigit():
+                        return int(cols[4])
+                        
                     return "PARSE_ERR"
                 except:
                     return "PARSE_ERR"
