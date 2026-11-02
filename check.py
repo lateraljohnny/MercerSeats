@@ -11,6 +11,7 @@ COURSES = [
     {"code": "BIO 482", "section": "001"},
     {"code": "BIO 382", "section": "001"},
     {"code": "INT 301", "section": "009"}, 
+    {"code": "PED 161F", "section": "003"}, 
 ]
 
 searchUrl = "https://adminapps.mercer.edu/classroomsched/default.aspx?C=M"
