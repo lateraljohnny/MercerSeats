@@ -13,6 +13,7 @@ COURSES = [
     {"code": "PED 161F", "section": "003"}, 
     {"code": "EGR 236", "section": "002"},
     {"code": "EGR 246L", "section": "007"},
+    {"code": "EGR 232", "section": "002"},
 ]
 
 searchUrl = "https://adminapps.mercer.edu/classroomsched/default.aspx?C=M"
